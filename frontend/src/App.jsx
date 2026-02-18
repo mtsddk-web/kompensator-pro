@@ -48,7 +48,9 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || 'Błąd podczas analizy')
+        // Wyświetl szczegółowy błąd z backendu
+        const errorMsg = errorData.detail || JSON.stringify(errorData) || 'Błąd podczas analizy'
+        throw new Error(errorMsg)
       }
 
       const data = await response.json()
@@ -408,8 +410,9 @@ function App() {
         )}
 
         {error && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800 font-medium">❌ {error}</p>
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
+            <p className="text-red-800 font-bold mb-2">❌ Błąd</p>
+            <p className="text-red-700 text-sm whitespace-pre-wrap font-mono">{error}</p>
           </div>
         )}
       </main>

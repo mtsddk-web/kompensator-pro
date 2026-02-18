@@ -1,0 +1,53 @@
+{
+  "version": "2025-01",
+  "updated": "2025-12-11",
+  "note": "Cennik wewnetrzny Sundek Energia - CENY ZAKUPU (nie pokazywac klientom!)",
+
+  "_INFO": "To sa ceny zakupu z hurtowni - NIE ceny dla klienta!",
+
+  "kompensatory": {
+    "sinexcel_15kvar": {
+      "model": "Sinexcel SVG 15kvar",
+      "moc_kvar": 15,
+      "koszt_zakupu": 6900,
+      "opis": "Kompensator aktywny 3-fazowy 15 kvar",
+      "typ": "dynamiczny"
+    }
+  },
+
+  "koszty_materialow": {
+    "przekladnik_50_5A": {
+      "koszt_jednostkowy": 45,
+      "ilosc": 3,
+      "opis": "Przekladnik pradowy 50/5A (3 szt dla 3-faz)"
+    },
+    "zabezpieczenie_3f": {
+      "koszt_jednostkowy": 40,
+      "ilosc": 1,
+      "opis": "Zabezpieczenie 3-fazowe"
+    },
+    "przewod_6x2_5_za_mb": {
+      "koszt_jednostkowy": 35,
+      "opis": "Przewod 6x2,5mm2 - cena za metr"
+    }
+  },
+
+  "koszty_pracy": {
+    "montaz_i_konfiguracja": {
+      "koszt": 1200,
+      "opis": "Montaz, podlaczenie i konfiguracja kompensatora"
+    }
+  },
+
+  "marza_procent": 30,
+  "vat_procent": 23,
+
+  "firma": {
+    "nazwa": "SUNDEK ENERGIA SP. Z O.O.",
+    "adres": "ul. Żwirki i Wigury 65A, 43-190 Mikołów",
+    "nip": "6351863563",
+    "telefon": "+48 518 618 058",
+    "email": "biuro@sundek-energia.pl",
+    "www": "https://sundek-energia.pl"
+  }
+}

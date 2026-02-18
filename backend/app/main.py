@@ -6,7 +6,7 @@ import os
 import shutil
 from dotenv import load_dotenv
 
-from app.services.ocr_service import OCRService
+from app.services.claude_ocr_service import ClaudeOCRService
 from app.services.calculator import CompensatorCalculator
 from app.models.schemas import CalculationRequest, CalculationResult
 
@@ -16,8 +16,8 @@ load_dotenv()
 # Initialize FastAPI
 app = FastAPI(
     title="KompensatorPRO API",
-    description="API do automatycznego doboru kompensatorów mocy biernej",
-    version="1.0.0"
+    description="API do automatycznego doboru kompensatorów mocy biernej (Claude Vision OCR)",
+    version="1.1.0"
 )
 
 # CORS - pozwól na requesty z frontendu
@@ -29,13 +29,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    print("⚠️  WARNING: OPENAI_API_KEY nie jest ustawiony! OCR nie będzie działał.")
+# Initialize services - Claude Vision API
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+if not ANTHROPIC_API_KEY:
+    print("⚠️  WARNING: ANTHROPIC_API_KEY nie jest ustawiony! OCR nie będzie działał.")
     print("⚠️  Ustaw klucz API w pliku .env")
 
-ocr_service = OCRService(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+ocr_service = ClaudeOCRService(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 calculator = CompensatorCalculator()
 
 # Upload directory
@@ -47,9 +47,10 @@ async def root():
     """Health check endpoint"""
     return {
         "status": "online",
-        "service": "KompensatorPRO API",
-        "version": "1.0.0",
-        "ocr_enabled": OPENAI_API_KEY is not None
+        "service": "KompensatorPRO API (Claude Vision)",
+        "version": "1.2.0",
+        "ocr_enabled": ANTHROPIC_API_KEY is not None,
+        "ocr_model": "claude-sonnet-4-5"
     }
 
 @app.post("/api/calculate", response_model=CalculationResult)

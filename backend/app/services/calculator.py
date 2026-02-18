@@ -38,56 +38,68 @@ class CompensatorCalculator:
             CalculationResult z rekomendacją
         """
 
-        # 1. Oblicz średnią moc bierną
-        srednia_kvar = energia_bierna_kwh / (okres_mc * 720)  # 720h = 30 dni × 24h
+        # 1. Oblicz średnią moc bierną (w kvar)
+        # 730h = średnio 30.4 dni × 24h (dokładniejsze niż 720h)
+        srednia_kvar = energia_bierna_kwh / (okres_mc * 730)
 
-        # 2. Oblicz szczytową moc bierną
-        # Mnożnik zależy od typu instalacji
-        if ma_pv:
-            mnoznik = 10  # Instalacje PV mają większe wahania
+        # 2. INTELIGENTNY ZAPAS zależny od tgφ i typu instalacji
+        # Im wyższe tgφ, tym większe przekroczenie i potrzeba kompensacji
+
+        if tg_phi >= 0.6:
+            # Duże przekroczenie (>50% ponad limit) - większa kompensacja
+            zapas_base = 1.6  # +60%
+        elif tg_phi >= 0.5:
+            # Średnie przekroczenie (25-50% ponad limit)
+            zapas_base = 1.5  # +50%
+        elif tg_phi >= 0.45:
+            # Małe przekroczenie (12-25% ponad limit)
+            zapas_base = 1.4  # +40%
         else:
-            mnoznik = 6   # Typowe przemysłowe
+            # Bardzo blisko progu 0.4 - minimalna kompensacja wystarcza
+            zapas_base = 1.3  # +30%
 
-        szczyt_kvar = srednia_kvar * mnoznik
+        # Dodatkowy zapas dla instalacji z PV (większe wahania)
+        if ma_pv:
+            zapas_base *= 1.25  # Dodatkowe +25% dla PV
 
-        # 3. Obliczenie alternatywne (jeśli mamy moc czynną)
+        # Oblicz wymaganą moc z zapasem
+        moc_wymagana_metoda1 = srednia_kvar * zapas_base
+
+        # 3. OBLICZENIE ALTERNATYWNE - wzór profesjonalny QC = P × (tgφ₁ - tgφ₂)
         qc_wzor = None
         if moc_czynna_kw:
-            # QC = P × (tgφ₁ - tgφ₂)
-            tg_phi_docelowy = 0.35  # Bezpieczny margines poniżej 0.4
+            # Mamy moc czynną - użyj wzoru podstawowego
+            tg_phi_docelowy = 0.38  # Bezpieczny próg (5% poniżej limitu 0.4)
             qc_wzor = moc_czynna_kw * (tg_phi - tg_phi_docelowy)
         else:
             # Szacuj moc czynną z energii biernej i tgφ
             if tg_phi and tg_phi > 0:
                 szacowana_energia_czynna = energia_bierna_kwh / tg_phi
-                szacowana_moc_czynna = szacowana_energia_czynna / (okres_mc * 720)
-                qc_wzor = szacowana_moc_czynna * (tg_phi - 0.35)
+                szacowana_moc_czynna = szacowana_energia_czynna / (okres_mc * 730)
+                qc_wzor = szacowana_moc_czynna * (tg_phi - 0.38)
 
-        # Wybierz większą wartość
-        moc_wymagana = max(szczyt_kvar, qc_wzor if qc_wzor else 0)
+        # Wybierz większą wartość z obu metod (bezpieczniejsza)
+        if qc_wzor and qc_wzor > 0:
+            moc_wymagana = max(moc_wymagana_metoda1, qc_wzor)
+        else:
+            moc_wymagana = moc_wymagana_metoda1
 
-        # 4. Dodaj zapasy
-        if ma_pv:
-            moc_wymagana *= 1.3  # +30% dla instalacji PV
+        # 4. Zaokrąglij do standardowej mocy LOPI LKD (minimum 5 kvar!)
+        moc_kvar = self._round_to_standard_power_lopi(moc_wymagana)
 
-        moc_wymagana *= 1.2  # +20% rezerwa rozwoju
+        # 5. LOPI LKD to zawsze kompensatory DYNAMICZNE (automatyczne)
+        typ = "dynamiczny"
 
-        # 5. Zaokrąglij do standardowej mocy
-        moc_kvar = self._round_to_standard_power(moc_wymagana)
-
-        # 6. Wybierz typ kompensatora
-        typ = "dynamiczny" if ma_pv else "klasyczny"
-
-        # 7. Znajdź rekomendowany model
+        # 6. Znajdź rekomendowany model LOPI LKD
         recommended = self._find_compensator(moc_kvar, typ)
 
-        # 8. Oblicz ROI
+        # 7. Oblicz ROI (Return on Investment)
         kary_pln = self._calculate_penalties(energia_bierna_kwh, okres_mc)
         oszczednosc_mc = kary_pln
         oszczednosc_rok = oszczednosc_mc * 12
         roi_lata = round(recommended["cena"] / oszczednosc_rok, 1) if oszczednosc_rok > 0 else 999
 
-        # 9. Przygotuj wynik
+        # 8. Przygotuj wynik
         return CalculationResult(
             moc_kvar=moc_kvar,
             typ=typ,
@@ -109,16 +121,36 @@ class CompensatorCalculator:
             },
             obliczenia={
                 "srednia_kvar": round(srednia_kvar, 2),
-                "szczyt_kvar": round(szczyt_kvar, 2),
+                "moc_wymagana": round(moc_wymagana, 2),
                 "qc_wzor": round(qc_wzor, 2) if qc_wzor else None,
-                "mnoznik": mnoznik,
-                "zapas_pv": "30%" if ma_pv else "0%",
-                "zapas_rozwoj": "20%"
+                "zapas_zastosowany": f"{round((zapas_base - 1) * 100)}%",
+                "metoda": "inteligentna (zależna od tgφ)",
+                "min_lopi": "5 kvar"
             }
         )
 
+    def _round_to_standard_power_lopi(self, moc_wymagana: float) -> int:
+        """
+        Zaokrągla do standardowej mocy LOPI LKD
+
+        LOPI LKD dostępne moce: 5, 10, 15, 20, 25, 30, 40, 50 kvar
+        MINIMUM: 5 kvar (nie ma mniejszych modeli)
+        """
+        lopi_powers = [5, 10, 15, 20, 25, 30, 40, 50]
+
+        # LOPI LKD minimum 5 kvar
+        if moc_wymagana < 5:
+            return 5
+
+        # Zaokrąglij do najbliższej mocy LOPI (w górę dla bezpieczeństwa)
+        for power in lopi_powers:
+            if power >= moc_wymagana:
+                return power
+
+        return 50  # Max dla modeli PRO
+
     def _round_to_standard_power(self, moc_wymagana: float) -> int:
-        """Zaokrągla do najbliższej standardowej mocy"""
+        """Zaokrągla do najbliższej standardowej mocy (stara metoda - backup)"""
         standard_powers = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100]
 
         for power in standard_powers:
